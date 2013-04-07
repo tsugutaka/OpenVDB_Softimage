@@ -4,12 +4,20 @@
 #include <xsi_pluginregistrar.h>
 #include <xsi_status.h>
 #include <xsi_argument.h>
+#include <xsi_factory.h>
 #include <xsi_command.h>
 #include <xsi_x3dobject.h>
 #include <xsi_primitive.h>
 #include <xsi_polygonmesh.h>
 #include <xsi_geometryaccessor.h>
 #include <xsi_doublearray.h>
+#include <xsi_longarray.h>
+#include <xsi_vector3f.h>
+#include <xsi_icenodecontext.h>
+#include <xsi_icenodedef.h>
+#include <xsi_indexset.h>
+#include <xsi_dataarray.h>
+#include <xsi_dataarray2D.h>
 
 #include <iostream>
 #include <sstream>
@@ -18,6 +26,29 @@
 #include <vector>
 #include <openvdb/openvdb.h>
 #include <openvdb/tools/MeshToVolume.h>
+#include <openvdb/tools/VolumeToMesh.h>
+
+// defines port, group, and map identifiers for the ice node
+enum IDs
+{
+	ID_IN_filePath = 0,
+   ID_IN_isoValue = 1,
+   ID_IN_adaptivity = 2,
+	ID_G_100 = 100,
+	ID_OUT_PointArray = 200,
+	ID_OUT_PolygonArray = 201,
+	ID_TYPE_CNS = 400,
+	ID_STRUCT_CNS,
+	ID_CTXT_CNS,
+	ID_UNDEF = ULONG_MAX
+};
+
+struct VolumeToMeshData
+{
+   VolumeToMeshData() : filePath(L"") {}
+
+   XSI::CString filePath;
+};
 
 std::string bkgdValueAsString (const openvdb::GridBase::ConstPtr& grid)
 {
@@ -87,7 +118,10 @@ std::string metadataAsString (const openvdb::MetaMap::ConstMetaIterator& begin, 
    return ostr.str();
 }
 
-using namespace XSI; 
+using namespace XSI;
+using namespace XSI::MATH;
+
+CStatus RegisterVolumeToMesh(PluginRegistrar& in_reg);
 
 SICALLBACK XSILoadPlugin (PluginRegistrar& in_reg)
 {
@@ -97,7 +131,8 @@ SICALLBACK XSILoadPlugin (PluginRegistrar& in_reg)
    in_reg.RegisterCommand(L"openvdb_print", L"openvdb_print");
    in_reg.RegisterCommand(L"openvdb_volumeToMesh", L"openvdb_volumeToMesh");
    in_reg.RegisterCommand(L"openvdb_meshToVolume", L"openvdb_meshToVolume");
-   //RegistrationInsertionPoint - do not remove this line
+   
+   RegisterVolumeToMesh(in_reg);
 
    return CStatus::OK;
 }
@@ -108,6 +143,45 @@ SICALLBACK XSIUnloadPlugin (const PluginRegistrar& in_reg)
    strPluginName = in_reg.GetName();
    Application().LogMessage(strPluginName + L" has been unloaded.", siVerboseMsg);
    return CStatus::OK;
+}
+
+
+CStatus RegisterVolumeToMesh(PluginRegistrar& in_reg)
+{
+	ICENodeDef nodeDef;
+	nodeDef = Application().GetFactory().CreateICENodeDef(L"VolumeToMesh", L"Volume To Mesh");
+
+	CStatus st;
+	st = nodeDef.PutColor(110,110,110);
+	st.AssertSucceeded();
+
+   st = nodeDef.PutThreadingModel(siICENodeSingleThreading);
+	st.AssertSucceeded();
+
+	// Add input ports and groups.
+	st = nodeDef.AddPortGroup(ID_G_100);
+	st.AssertSucceeded();
+
+	st = nodeDef.AddInputPort(ID_IN_filePath,ID_G_100,siICENodeDataString,siICENodeStructureSingle,siICENodeContextSingleton,L"File Path",L"filePath",L"",CValue(),CValue(),ID_UNDEF,ID_UNDEF,ID_CTXT_CNS);
+	st.AssertSucceeded();
+   
+   st = nodeDef.AddInputPort(ID_IN_isoValue,ID_G_100,siICENodeDataFloat,siICENodeStructureSingle,siICENodeContextSingleton,L"Iso Value",L"isoValue",0.0,CValue(),CValue(),ID_UNDEF,ID_UNDEF,ID_CTXT_CNS);
+	st.AssertSucceeded();
+
+   st = nodeDef.AddInputPort(ID_IN_adaptivity,ID_G_100,siICENodeDataFloat,siICENodeStructureSingle,siICENodeContextSingleton,L"Adaptivity",L"adaptivity",0.0,CValue(),CValue(),ID_UNDEF,ID_UNDEF,ID_CTXT_CNS);
+	st.AssertSucceeded();
+
+	// Add output ports.
+	st = nodeDef.AddOutputPort(ID_OUT_PointArray,siICENodeDataVector3,siICENodeStructureArray,siICENodeContextSingleton,L"Point Array",L"pointList",ID_UNDEF,ID_UNDEF,ID_CTXT_CNS);
+	st.AssertSucceeded();
+
+	st = nodeDef.AddOutputPort(ID_OUT_PolygonArray,siICENodeDataLong,siICENodeStructureArray,siICENodeContextSingleton,L"Polygon Array",L"polygonPoolList",ID_UNDEF,ID_UNDEF,ID_CTXT_CNS);
+	st.AssertSucceeded();
+
+	PluginItem nodeItem = in_reg.RegisterICENode(nodeDef);
+	nodeItem.PutCategories(L"OpenVDB");
+
+	return CStatus::OK;
 }
 
 SICALLBACK openvdb_print_Init (CRef& in_ctxt)
@@ -336,4 +410,198 @@ SICALLBACK openvdb_meshToVolume_Execute (CRef& in_ctxt)
 
    return CStatus::OK;
 }
+SICALLBACK VolumeToMesh_Init (ICENodeContext& in_ctxt)
+{
+   if (!openvdb::FloatGrid::isRegistered())
+      Application().LogMessage(L"openvdb : initialized!");
+      openvdb::initialize();
 
+   return CStatus::OK;
+}
+
+SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& in_ctxt)
+{
+   CDataArrayString filePathData(in_ctxt, ID_IN_filePath);
+   Application().LogMessage(L"BeginEvaluate");
+   
+   CValue userData = in_ctxt.GetUserData();
+   VolumeToMeshData* nodeData;
+   if (userData.IsEmpty())
+   {
+      nodeData = new VolumeToMeshData;
+      nodeData->filePath = CString(filePathData[0]);
+      in_ctxt.PutUserData((CValue::siPtrType)nodeData);
+   }
+   else
+   {
+      nodeData = (VolumeToMeshData*)(CValue::siPtrType)userData;
+      nodeData->filePath = CString(filePathData[0]);
+      in_ctxt.PutUserData((CValue::siPtrType)nodeData);
+   }
+   return CStatus::OK;
+}
+
+SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& in_ctxt)
+{
+   Application().LogMessage(L"Evaluate");
+
+   CValue userData = in_ctxt.GetUserData();
+   VolumeToMeshData* nodeData;
+   if (userData.IsEmpty())
+   {
+      //VolumeToMeshData* nodeData;
+      //nodeData->filePath = CString(filePathData[0]);
+      return CStatus::Fail;
+   }   
+   else
+   {
+      nodeData = (VolumeToMeshData*)(CValue::siPtrType)userData;
+   }
+
+   openvdb::GridPtrVecPtr grids;
+   openvdb::MetaMap::Ptr meta;
+
+   openvdb::io::File file(nodeData->filePath.GetAsciiString());
+   try
+   {
+      file.open();
+      grids = file.getGrids();
+      meta = file.getMetadata();
+      file.close();
+   }
+   catch (openvdb::Exception& e)
+   {
+      Application().LogMessage(CString(e.what()) + L" : " + nodeData->filePath);
+      return CStatus::Fail;
+   }
+
+   CDataArrayFloat iso(in_ctxt, ID_IN_isoValue);
+   CDataArrayFloat adaptivity(in_ctxt, ID_IN_adaptivity);
+   
+   // Setup level set mesher
+   openvdb::tools::VolumeToMesh mesher(iso[0], adaptivity[0]);
+   
+   //openvdb::FloatGrid::Ptr levelSetGrid;
+   //openvdb::GridBase::Ptr grid;
+   for (openvdb::GridPtrVec::const_iterator it = grids->begin(); it != grids->end(); ++it)
+   {
+      const openvdb::GridBase::ConstPtr grid = *it;
+      if (!grid) continue;
+      CString gridName(grid->getName().c_str());
+      CString gridType(grid->valueType().c_str());
+      Application().LogMessage(nodeData->filePath + L" : " + gridName + L" : " + gridType );
+
+      // first level set only for now
+      const openvdb::GridClass gridClass = grid->getGridClass();
+      if (gridClass == openvdb::GRID_LEVEL_SET)
+      {
+         openvdb::FloatGrid::ConstPtr levelSetGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(*it);
+         mesher(*(levelSetGrid.get()));
+         break;
+      }
+   }
+
+	// The current output port being evaluated...
+	ULONG out_portID = in_ctxt.GetEvaluatedOutputPortID();
+   
+	switch(out_portID)
+	{		
+		case ID_OUT_PointArray:
+      {
+         // Get the output port array ...
+         CDataArray2DVector3f outData(in_ctxt);
+         outData.Resize(0,mesher.pointListSize());
+         const openvdb::tools::PointList& points = mesher.pointList();
+
+         for (size_t i = 0; i<mesher.pointListSize(); ++i)
+            outData[0][i] = CVector3f(points[i].x(), points[i].y(), points[i].z());
+
+         CValue pointArraySize(mesher.pointListSize());
+         Application().LogMessage(L"point array port = " + pointArraySize.GetAsText());
+         break;
+      }
+      case ID_OUT_PolygonArray:
+      {
+         CDataArray2DLong outData (in_ctxt);
+         openvdb::tools::PolygonPoolList& polygonPoolList = mesher.polygonPoolList();
+         //outData.Resize(0, mesher.polygonPoolListSize());
+         
+         LONG idx = 0;
+         for (size_t i=0; i<mesher.polygonPoolListSize(); ++i)
+         {
+            openvdb::tools::PolygonPool& polygons = polygonPoolList[i];
+            Application().LogMessage(L"number of quads " + CValue(polygons.numQuads()).GetAsText());
+
+            // Copy quads
+            for (size_t q=0; q=polygons.numQuads(); ++q)
+            {
+               openvdb::Vec4I& quad = polygons.quad(q);
+               for (int v=0; v<4; ++v)
+               {
+                  //outData[0][idx] = (LONG)quad[v];
+                  idx++;
+               }
+               // end of quad
+               idx++;
+               //outData[0][idx] = (LONG)-1;
+            }
+
+            Application().LogMessage(L"number of triangles " + CValue(polygons.numTriangles()).GetAsText());
+            // Copy triangles (if adaptive mesh.)
+            for (size_t t=0; t<polygons.numTriangles(); ++t)
+            {
+
+               openvdb::Vec3I& triangle = polygons.triangle(t);
+               for (int v=0; v<3; ++v)
+               {
+                  //outData[0][idx] = (LONG)triangle[v];
+                  idx++;
+               }
+               // end of triangle
+               idx++;
+               //outData[0][idx] = (LONG)-1;
+            }
+         }
+
+         CValue polygonArraySize(mesher.polygonPoolListSize());
+         Application().LogMessage(L"polygon array port = " + polygonArraySize.GetAsText());
+         break;
+      }
+      default:
+         break;
+	};
+	
+	return CStatus::OK;
+}
+
+
+//SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& in_ctxt)
+//{
+//   VolumeToMeshData
+//	// Example to demonstrate how to allocate a thread safe user data buffer.
+//	CValue userData = in_ctxt.GetUserData();
+//
+//	pPerThreadData = new std::vector<CSampleData>;
+//	in_ctxt.PutUserData( (CValue::siPtrType)pPerThreadData );
+//
+//
+//	return CStatus::OK;
+//}
+//
+//SICALLBACK MyCustomICENode_EndEvaluate( ICENodeContext& in_ctxt )
+//{
+//	// Release memory allocated in BeginEvaluate
+//	CValue userData = in_ctxt.GetUserData( );
+//	if ( userData.IsEmpty() )
+//	{
+//		return CStatus::OK;
+//	}
+//
+//	std::vector<CSampleData>* pPerThreadData = (std::vector<CSampleData>*)(CValue::siPtrType)in_ctxt.GetUserData( );
+//	delete pPerThreadData;
+//
+//	// Clear user data"] ); 
+//	in_ctxt.PutUserData( CValue() );
+//	
+//	return CStatus::OK;
+//}
