@@ -184,9 +184,9 @@ CStatus RegisterVolumeToMesh(PluginRegistrar& in_reg)
 	return CStatus::OK;
 }
 
-SICALLBACK openvdb_print_Init (CRef& in_ctxt)
+SICALLBACK openvdb_print_Init (CRef& ref)
 {
-   Context ctxt(in_ctxt);
+   Context ctxt(ref);
    Command oCmd;
    oCmd = ctxt.GetSource();
    oCmd.PutDescription(L"print info about an input openvdb file(.vdb)");
@@ -199,9 +199,9 @@ SICALLBACK openvdb_print_Init (CRef& in_ctxt)
    return CStatus::OK;
 }
 
-SICALLBACK openvdb_print_Execute (CRef& in_ctxt)
+SICALLBACK openvdb_print_Execute (CRef& ref)
 {
-   Context ctxt(in_ctxt);
+   Context ctxt(ref);
    CValueArray args = ctxt.GetAttribute(L"Arguments");
    CString filename = args[0];
    bool printMetadata = args[1];
@@ -282,9 +282,9 @@ SICALLBACK openvdb_print_Execute (CRef& in_ctxt)
    return CStatus::OK;
 }
 
-SICALLBACK openvdb_volumeToMesh_Init (CRef& in_ctxt)
+SICALLBACK openvdb_volumeToMesh_Init (CRef& ref)
 {
-   Context ctxt(in_ctxt);
+   Context ctxt(ref);
    Command oCmd;
    oCmd = ctxt.GetSource();
    oCmd.PutDescription(L"mesh a scalar grid from an input openvdb file(.vdb)");
@@ -297,9 +297,9 @@ SICALLBACK openvdb_volumeToMesh_Init (CRef& in_ctxt)
    return CStatus::OK;
 }
 
-SICALLBACK openvdb_volumeToMesh_Execute (CRef& in_ctxt)
+SICALLBACK openvdb_volumeToMesh_Execute (CRef& ref)
 {
-   Context ctxt(in_ctxt);
+   Context ctxt(ref);
    CValueArray args = ctxt.GetAttribute(L"Arguments");
    CString filename = args[0];
 
@@ -313,9 +313,9 @@ SICALLBACK openvdb_volumeToMesh_Execute (CRef& in_ctxt)
    return CStatus::OK;
 }
 
-SICALLBACK openvdb_meshToVolume_Init (CRef& in_ctxt)
+SICALLBACK openvdb_meshToVolume_Init (CRef& ref)
 {
-   Context ctxt(in_ctxt);
+   Context ctxt(ref);
    Command oCmd;
    oCmd = ctxt.GetSource();
    oCmd.PutDescription(L"mesh a scalar grid from an input openvdb file(.vdb)");
@@ -331,9 +331,9 @@ SICALLBACK openvdb_meshToVolume_Init (CRef& in_ctxt)
    return CStatus::OK;
 }
 
-SICALLBACK openvdb_meshToVolume_Execute (CRef& in_ctxt)
+SICALLBACK openvdb_meshToVolume_Execute (CRef& ref)
 {
-   Context ctxt(in_ctxt);
+   Context ctxt(ref);
    CValueArray args = ctxt.GetAttribute(L"Arguments");
    CString filename = args[0];
    CValue inputMesh = args[1];
@@ -410,7 +410,7 @@ SICALLBACK openvdb_meshToVolume_Execute (CRef& in_ctxt)
 
    return CStatus::OK;
 }
-SICALLBACK VolumeToMesh_Init (ICENodeContext& in_ctxt)
+SICALLBACK VolumeToMesh_Init (ICENodeContext& ctxt)
 {
    if (!openvdb::FloatGrid::isRegistered())
       Application().LogMessage(L"openvdb : initialized!");
@@ -419,33 +419,33 @@ SICALLBACK VolumeToMesh_Init (ICENodeContext& in_ctxt)
    return CStatus::OK;
 }
 
-SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& in_ctxt)
+SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& ctxt)
 {
-   CDataArrayString filePathData(in_ctxt, ID_IN_filePath);
-   Application().LogMessage(L"BeginEvaluate");
+   CDataArrayString filePathData(ctxt, ID_IN_filePath);
+   //Application().LogMessage(L"BeginEvaluate");
    
-   CValue userData = in_ctxt.GetUserData();
+   CValue userData = ctxt.GetUserData();
    VolumeToMeshData* nodeData;
    if (userData.IsEmpty())
    {
       nodeData = new VolumeToMeshData;
       nodeData->filePath = CString(filePathData[0]);
-      in_ctxt.PutUserData((CValue::siPtrType)nodeData);
+      ctxt.PutUserData((CValue::siPtrType)nodeData);
    }
    else
    {
       nodeData = (VolumeToMeshData*)(CValue::siPtrType)userData;
       nodeData->filePath = CString(filePathData[0]);
-      in_ctxt.PutUserData((CValue::siPtrType)nodeData);
+      ctxt.PutUserData((CValue::siPtrType)nodeData);
    }
    return CStatus::OK;
 }
 
-SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& in_ctxt)
+SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& ctxt)
 {
-   Application().LogMessage(L"Evaluate");
+   //Application().LogMessage(L"Evaluate");
 
-   CValue userData = in_ctxt.GetUserData();
+   CValue userData = ctxt.GetUserData();
    VolumeToMeshData* nodeData;
    if (userData.IsEmpty())
    {
@@ -475,8 +475,8 @@ SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& in_ctxt)
       return CStatus::Fail;
    }
 
-   CDataArrayFloat iso(in_ctxt, ID_IN_isoValue);
-   CDataArrayFloat adaptivity(in_ctxt, ID_IN_adaptivity);
+   CDataArrayFloat iso(ctxt, ID_IN_isoValue);
+   CDataArrayFloat adaptivity(ctxt, ID_IN_adaptivity);
    
    // Setup level set mesher
    openvdb::tools::VolumeToMesh mesher(iso[0], adaptivity[0]);
@@ -502,25 +502,26 @@ SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& in_ctxt)
    }
 
    // The current output port being evaluated...
-   ULONG out_portID = in_ctxt.GetEvaluatedOutputPortID();
+   ULONG out_portID = ctxt.GetEvaluatedOutputPortID();
    
    switch(out_portID)
    {
       case ID_OUT_PointArray:
       {
          // Get the output port array ...
-         CDataArray2DVector3f outData(in_ctxt);
-         outData.Resize(0, mesher.pointListSize());
+         CDataArray2DVector3f outData(ctxt);
+         CDataArray2DVector3f::Accessor it = outData.Resize(0, mesher.pointListSize());
+         CIndexSet::Iterator idx = CIndexSet(ctxt).Begin();
          const openvdb::tools::PointList& points = mesher.pointList();
 
-         for (size_t i = 0; i<mesher.pointListSize(); ++i)
-            outData[0][i] = CVector3f(points[i].x(), points[i].y(), points[i].z());
+         for (size_t i=0; i<mesher.pointListSize(); ++i, idx.Next())
+            it[idx] = CVector3f(points[i].x(), points[i].y(), points[i].z());
 
          break;
       }
       case ID_OUT_PolygonArray:
       {
-         CDataArray2DLong outData (in_ctxt);
+         CDataArray2DLong outData (ctxt);
          openvdb::tools::PolygonPoolList& polygonPoolList = mesher.polygonPoolList();
          
          ULONG outputArraySize = 0;
@@ -533,30 +534,30 @@ SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& in_ctxt)
             outputArraySize += polygons.numTriangles() * 4;
          }
 
-         outData.Resize(0, outputArraySize);
+         CDataArray2DLong::Accessor it = outData.Resize(0, outputArraySize);
+         CIndexSet::Iterator idx = CIndexSet(ctxt).Begin();
 
-         ULONG idx = 0;
          for (size_t i=0, q=0, t=0; i<mesher.polygonPoolListSize(); ++i, q=0, t=0)
          {
             const openvdb::tools::PolygonPool& polygons = polygonPoolList[i];
             for (; q<polygons.numQuads(); ++q)
             {
                const openvdb::Vec4I& quad = polygons.quad(q);
-               outData[0][idx++] = quad.w();
-               outData[0][idx++] = quad.z();
-               outData[0][idx++] = quad.y();
-               outData[0][idx++] = quad.x();
+               it[idx] = quad.w(); idx.Next();
+               it[idx] = quad.z(); idx.Next();
+               it[idx] = quad.y(); idx.Next();
+               it[idx] = quad.x(); idx.Next();
                // end of quad
-               outData[0][idx++] = -1;
+               it[idx] = -1; idx.Next();
             }
             for (; t<polygons.numTriangles(); ++t)
             {
                const openvdb::Vec3I& triangle = polygons.triangle(t);
-               outData[0][idx++] = triangle.z();
-               outData[0][idx++] = triangle.y();
-               outData[0][idx++] = triangle.z();
+               it[idx] = triangle.z(); idx.Next();
+               it[idx] = triangle.y(); idx.Next();
+               it[idx] = triangle.x(); idx.Next();
                // end of triangle
-               outData[0][idx++] = -1;
+               it[idx] = -1; idx.Next();
             }
          }
          break;
