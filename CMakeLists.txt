@@ -17,7 +17,7 @@ set (ILMBASE_ROOT "C:/Program Files/ILMBase")
 find_package (ilmbase REQUIRED)
 find_package (tbb)
 
-add_definitions(-DOPENVDB_STATIC -DNOMINMAX)
+add_definitions(-DOPENVDB_STATICLIB -DNOMINMAX)
 
 message (STATUS "---configuring openvdb_softimage plugin---")
 
