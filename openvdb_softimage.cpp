@@ -508,56 +508,62 @@ SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& ctxt)
    {
       case ID_OUT_PointArray:
       {
-         // Get the output port array ...
-         CDataArray2DVector3f outData(ctxt);
-         CDataArray2DVector3f::Accessor it = outData.Resize(0, mesher.pointListSize());
-         CIndexSet::Iterator idx = CIndexSet(ctxt).Begin();
+         CDataArray2DVector3f output(ctxt);
+         ULONG listSize = mesher.pointListSize();
+         CDataArray2DVector3f::Accessor iter = output.Resize(0, listSize);
+         CIndexSet::Iterator index = CIndexSet(ctxt).Begin();
          const openvdb::tools::PointList& points = mesher.pointList();
 
-         for (size_t i=0; i<mesher.pointListSize(); ++i, idx.Next())
-            it[idx] = CVector3f(points[i].x(), points[i].y(), points[i].z());
-
+         for (size_t i=0; i<listSize; ++i, index.Next())
+         {
+            openvdb::math::Vec3s pnt = points[i];
+            iter[index] = CVector3f(pnt.x(), pnt.y(), pnt.z());
+         }
          break;
       }
       case ID_OUT_PolygonArray:
       {
-         CDataArray2DLong outData (ctxt);
-         openvdb::tools::PolygonPoolList& polygonPoolList = mesher.polygonPoolList();
-         
-         ULONG outputArraySize = 0;
+         using openvdb::tools::PolygonPoolList;
+         using openvdb::tools::PolygonPool;
+
+         const PolygonPoolList& poolList = mesher.polygonPoolList();
+
+         ULONG arraySize = 0;
          for (size_t n=0; n<mesher.polygonPoolListSize(); ++n)
          {
-            const openvdb::tools::PolygonPool& polygons = polygonPoolList[n];
+            const PolygonPool& polygons = poolList[n];
             // accumulate all quads and triangles
             // keep in mind we need a -1 at the end of each polygon 
-            outputArraySize += polygons.numQuads() * 5;
-            outputArraySize += polygons.numTriangles() * 4;
+            arraySize += polygons.numQuads() * 5;
+            arraySize += polygons.numTriangles() * 4;
          }
 
-         CDataArray2DLong::Accessor it = outData.Resize(0, outputArraySize);
-         CIndexSet::Iterator idx = CIndexSet(ctxt).Begin();
-
-         for (size_t i=0, q=0, t=0; i<mesher.polygonPoolListSize(); ++i, q=0, t=0)
+         CDataArray2DLong output(ctxt);
+         CDataArray2DLong::Accessor iter = output.Resize(0, arraySize);
+         CIndexSet::Iterator index = CIndexSet(ctxt).Begin();
+         
+         size_t i=0, q=0, t=0;
+         for (; i<mesher.polygonPoolListSize(); ++i, q=0, t=0)
          {
-            const openvdb::tools::PolygonPool& polygons = polygonPoolList[i];
+            const PolygonPool& polygons= poolList[i];
             for (; q<polygons.numQuads(); ++q)
             {
                const openvdb::Vec4I& quad = polygons.quad(q);
-               it[idx] = quad.w(); idx.Next();
-               it[idx] = quad.z(); idx.Next();
-               it[idx] = quad.y(); idx.Next();
-               it[idx] = quad.x(); idx.Next();
+               iter[index] = quad.w(); index.Next();
+               iter[index] = quad.z(); index.Next();
+               iter[index] = quad.y(); index.Next();
+               iter[index] = quad.x(); index.Next();
                // end of quad
-               it[idx] = -1; idx.Next();
+               iter[index] = -1; index.Next();
             }
             for (; t<polygons.numTriangles(); ++t)
             {
                const openvdb::Vec3I& triangle = polygons.triangle(t);
-               it[idx] = triangle.z(); idx.Next();
-               it[idx] = triangle.y(); idx.Next();
-               it[idx] = triangle.x(); idx.Next();
+               iter[index] = triangle.z(); index.Next();
+               iter[index] = triangle.y(); index.Next();
+               iter[index] = triangle.x(); index.Next();
                // end of triangle
-               it[idx] = -1; idx.Next();
+               iter[index] = -1; index.Next();
             }
          }
          break;
