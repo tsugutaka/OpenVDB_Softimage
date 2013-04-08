@@ -501,70 +501,64 @@ SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& in_ctxt)
       }
    }
 
-	// The current output port being evaluated...
-	ULONG out_portID = in_ctxt.GetEvaluatedOutputPortID();
+   // The current output port being evaluated...
+   ULONG out_portID = in_ctxt.GetEvaluatedOutputPortID();
    
-	switch(out_portID)
-	{		
-		case ID_OUT_PointArray:
+   switch(out_portID)
+   {
+      case ID_OUT_PointArray:
       {
          // Get the output port array ...
          CDataArray2DVector3f outData(in_ctxt);
-         outData.Resize(0,mesher.pointListSize());
+         outData.Resize(0, mesher.pointListSize());
          const openvdb::tools::PointList& points = mesher.pointList();
 
          for (size_t i = 0; i<mesher.pointListSize(); ++i)
             outData[0][i] = CVector3f(points[i].x(), points[i].y(), points[i].z());
 
-         CValue pointArraySize(mesher.pointListSize());
-         Application().LogMessage(L"point array port = " + pointArraySize.GetAsText());
          break;
       }
       case ID_OUT_PolygonArray:
       {
          CDataArray2DLong outData (in_ctxt);
          openvdb::tools::PolygonPoolList& polygonPoolList = mesher.polygonPoolList();
-         //outData.Resize(0, mesher.polygonPoolListSize());
          
-         LONG idx = 0;
-         for (size_t i=0; i<mesher.polygonPoolListSize(); ++i)
+         ULONG outputArraySize = 0;
+         for (size_t n=0; n<mesher.polygonPoolListSize(); ++n)
          {
-            openvdb::tools::PolygonPool& polygons = polygonPoolList[i];
-            Application().LogMessage(L"number of quads " + CValue(polygons.numQuads()).GetAsText());
-
-            // Copy quads
-            for (size_t q=0; q=polygons.numQuads(); ++q)
-            {
-               openvdb::Vec4I& quad = polygons.quad(q);
-               for (int v=0; v<4; ++v)
-               {
-                  //outData[0][idx] = (LONG)quad[v];
-                  idx++;
-               }
-               // end of quad
-               idx++;
-               //outData[0][idx] = (LONG)-1;
-            }
-
-            Application().LogMessage(L"number of triangles " + CValue(polygons.numTriangles()).GetAsText());
-            // Copy triangles (if adaptive mesh.)
-            for (size_t t=0; t<polygons.numTriangles(); ++t)
-            {
-
-               openvdb::Vec3I& triangle = polygons.triangle(t);
-               for (int v=0; v<3; ++v)
-               {
-                  //outData[0][idx] = (LONG)triangle[v];
-                  idx++;
-               }
-               // end of triangle
-               idx++;
-               //outData[0][idx] = (LONG)-1;
-            }
+            const openvdb::tools::PolygonPool& polygons = polygonPoolList[n];
+            // accumulate all quads and triangles
+            // keep in mind we need a -1 at the end of each polygon 
+            outputArraySize += polygons.numQuads() * 5;
+            outputArraySize += polygons.numTriangles() * 4;
          }
 
-         CValue polygonArraySize(mesher.polygonPoolListSize());
-         Application().LogMessage(L"polygon array port = " + polygonArraySize.GetAsText());
+         outData.Resize(0, outputArraySize);
+
+         ULONG idx = 0;
+         for (size_t i=0, q=0, t=0; i<mesher.polygonPoolListSize(); ++i, q=0, t=0)
+         {
+            const openvdb::tools::PolygonPool& polygons = polygonPoolList[i];
+            for (; q<polygons.numQuads(); ++q)
+            {
+               const openvdb::Vec4I& quad = polygons.quad(q);
+               outData[0][idx++] = quad.w();
+               outData[0][idx++] = quad.z();
+               outData[0][idx++] = quad.y();
+               outData[0][idx++] = quad.x();
+               // end of quad
+               outData[0][idx++] = -1;
+            }
+            for (; t<polygons.numTriangles(); ++t)
+            {
+               const openvdb::Vec3I& triangle = polygons.triangle(t);
+               outData[0][idx++] = triangle.z();
+               outData[0][idx++] = triangle.y();
+               outData[0][idx++] = triangle.z();
+               // end of triangle
+               outData[0][idx++] = -1;
+            }
+         }
          break;
       }
       default:
