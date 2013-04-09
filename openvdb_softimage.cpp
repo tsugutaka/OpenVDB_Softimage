@@ -18,6 +18,7 @@
 #include <xsi_indexset.h>
 #include <xsi_dataarray.h>
 #include <xsi_dataarray2D.h>
+#include <xsi_iceportstate.h>
 
 #include <iostream>
 #include <sstream>
@@ -45,9 +46,13 @@ enum IDs
 
 struct VolumeToMeshData
 {
-   VolumeToMeshData() : filePath(L"") {}
+   VolumeToMeshData() : filePath(L""), isDirty(true) {}
 
    XSI::CString filePath;
+   bool isDirty;
+   openvdb::GridPtrVecPtr grids;
+   openvdb::MetaMap::Ptr meta;
+
 };
 
 std::string bkgdValueAsString (const openvdb::GridBase::ConstPtr& grid)
@@ -116,6 +121,24 @@ std::string metadataAsString (const openvdb::MetaMap::ConstMetaIterator& begin, 
       sep[0] = '\n';
    }
    return ostr.str();
+}
+
+XSI::CStatus getGridsFromFile(VolumeToMeshData* nodeData)
+{
+   openvdb::io::File file(nodeData->filePath.GetAsciiString());
+   try
+   {
+      file.open();
+      nodeData->grids = file.getGrids();
+      //meta = file.getMetadata();
+      file.close();
+   }
+   catch (openvdb::Exception& e)
+   {
+      XSI::Application().LogMessage(XSI::CString(e.what()) + L" : " + nodeData->filePath);
+      return XSI::CStatus::Fail;
+   }
+   return XSI::CStatus::OK;
 }
 
 using namespace XSI;
@@ -422,7 +445,7 @@ SICALLBACK VolumeToMesh_Init (ICENodeContext& ctxt)
 SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& ctxt)
 {
    CDataArrayString filePathData(ctxt, ID_IN_filePath);
-   //Application().LogMessage(L"BeginEvaluate");
+   Application().LogMessage(L"BeginEvaluate");
    
    CValue userData = ctxt.GetUserData();
    VolumeToMeshData* nodeData;
@@ -430,12 +453,33 @@ SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& ctxt)
    {
       nodeData = new VolumeToMeshData;
       nodeData->filePath = CString(filePathData[0]);
-      ctxt.PutUserData((CValue::siPtrType)nodeData);
+      
+      if (getGridsFromFile(nodeData)==CStatus::OK)
+      {
+         ctxt.PutUserData((CValue::siPtrType)nodeData);
+      }
+      else
+      {
+         delete nodeData;
+         return CStatus::OK;
+      }   
    }
    else
    {
       nodeData = (VolumeToMeshData*)(CValue::siPtrType)userData;
-      nodeData->filePath = CString(filePathData[0]);
+      CICEPortState filePathState(ctxt, ID_IN_filePath);
+      if (filePathState.IsDirty(CICEPortState::siDataDirtyState))
+      {
+         Application().LogMessage(L"data dirty");
+         nodeData->filePath = CString(filePathData[0]);
+         nodeData->isDirty = true;
+      }
+      else
+      {
+         Application().LogMessage(L"data not dirty");
+         nodeData->isDirty = false;
+      }
+      filePathState.ClearState();
       ctxt.PutUserData((CValue::siPtrType)nodeData);
    }
    return CStatus::OK;
@@ -443,36 +487,22 @@ SICALLBACK VolumeToMesh_BeginEvaluate (ICENodeContext& ctxt)
 
 SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& ctxt)
 {
-   //Application().LogMessage(L"Evaluate");
+   Application().LogMessage(L"Evaluate");
 
    CValue userData = ctxt.GetUserData();
    VolumeToMeshData* nodeData;
    if (userData.IsEmpty())
    {
-      //VolumeToMeshData* nodeData;
-      //nodeData->filePath = CString(filePathData[0]);
-      return CStatus::Fail;
+      return CStatus::OK;
    }   
    else
    {
       nodeData = (VolumeToMeshData*)(CValue::siPtrType)userData;
-   }
-
-   openvdb::GridPtrVecPtr grids;
-   openvdb::MetaMap::Ptr meta;
-
-   openvdb::io::File file(nodeData->filePath.GetAsciiString());
-   try
-   {
-      file.open();
-      grids = file.getGrids();
-      meta = file.getMetadata();
-      file.close();
-   }
-   catch (openvdb::Exception& e)
-   {
-      Application().LogMessage(CString(e.what()) + L" : " + nodeData->filePath);
-      return CStatus::Fail;
+      if (nodeData->isDirty==false)
+      {
+         Application().LogMessage(L"skipping evaluate");
+         return CStatus::OK;
+      }
    }
 
    CDataArrayFloat iso(ctxt, ID_IN_isoValue);
@@ -480,10 +510,9 @@ SICALLBACK VolumeToMesh_Evaluate (ICENodeContext& ctxt)
    
    // Setup level set mesher
    openvdb::tools::VolumeToMesh mesher(iso[0], adaptivity[0]);
-   
-   //openvdb::FloatGrid::Ptr levelSetGrid;
-   //openvdb::GridBase::Ptr grid;
-   for (openvdb::GridPtrVec::const_iterator it = grids->begin(); it != grids->end(); ++it)
+
+   openvdb::GridPtrVec::const_iterator it = nodeData->grids->begin();
+   for (; it != nodeData->grids->end(); ++it)
    {
       const openvdb::GridBase::ConstPtr grid = *it;
       if (!grid) continue;
