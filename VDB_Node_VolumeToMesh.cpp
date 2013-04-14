@@ -146,58 +146,72 @@ CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
       }
       default:
          break;
-	};
-	
-	return CStatus::OK;
+   };
+   
+   return CStatus::OK;
 }
 
 CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
 {
-	ICENodeDef nodeDef;
+   ICENodeDef nodeDef;
    Factory factory = Application().GetFactory();
-	nodeDef = factory.CreateICENodeDef(L"VDB_Node_VolumeToMesh", L"Volume To Mesh");
+   nodeDef = factory.CreateICENodeDef(L"VDB_Node_VolumeToMesh", L"Volume To Mesh");
 
-	CStatus st;
-	st = nodeDef.PutColor(110, 110, 110);
-	st.AssertSucceeded();
+   CStatus st;
+   st = nodeDef.PutColor(110, 110, 110);
+   st.AssertSucceeded();
 
    st = nodeDef.PutThreadingModel(siICENodeSingleThreading);
-	st.AssertSucceeded();
+   st.AssertSucceeded();
 
-	// Add input ports and groups.
-	st = nodeDef.AddPortGroup(kVolumeToMeshGroup1);
-	st.AssertSucceeded();
+   // Add custom types definition
+   st = nodeDef.DefineCustomType(L"openvdb_grid" ,L"VDB Grid",
+      L"openvdb grid type", 155, 21, 10);
+   st.AssertSucceeded();
 
-	st = nodeDef.AddInputPort(kVolumeToMeshFilePath, kVolumeToMeshGroup1,
-      siICENodeDataString, siICENodeStructureSingle, siICENodeContextSingleton,
-      L"File Path", L"filePath", L"");
-	st.AssertSucceeded();
+   // Add input ports and groups.
+   st = nodeDef.AddPortGroup(kVolumeToMeshGroup1);
+   st.AssertSucceeded();
+
+   //st = nodeDef.AddInputPort(kVolumeToMeshFilePath, kVolumeToMeshGroup1,
+   //   siICENodeDataString, siICENodeStructureSingle, siICENodeContextSingleton,
+   //   L"File Path", L"filePath", L"");
+   //st.AssertSucceeded();
+
+   CStringArray customTypes(1);
+   customTypes[0] = L"openvdb_grid";
+   
+   // stupid default arguments wont work have to add ULONG_MAX
+   st = nodeDef.AddInputPort(kVolumeToMeshVDBGrid, kVolumeToMeshGroup1,
+      customTypes, siICENodeStructureSingle, siICENodeContextSingleton,
+      L"VDB Grid", L"openvdb_grid",ULONG_MAX,ULONG_MAX,ULONG_MAX);
+   st.AssertSucceeded();
    
    st = nodeDef.AddInputPort(kVolumeToMeshIsoValue, kVolumeToMeshGroup1,
       siICENodeDataFloat, siICENodeStructureSingle, siICENodeContextSingleton,
       L"Iso Value", L"isoValue", 0.0);
-	st.AssertSucceeded();
+   st.AssertSucceeded();
 
    st = nodeDef.AddInputPort(kVolumeToMeshAdaptivity, kVolumeToMeshGroup1,
       siICENodeDataFloat, siICENodeStructureSingle, siICENodeContextSingleton,
       L"Adaptivity", L"adaptivity", 0.0);
-	st.AssertSucceeded();
+   st.AssertSucceeded();
 
-	// Add output ports.
-	st = nodeDef.AddOutputPort(kVolumeToMeshPointArray, siICENodeDataVector3,
+   // Add output ports.
+   st = nodeDef.AddOutputPort(kVolumeToMeshPointArray, siICENodeDataVector3,
       siICENodeStructureArray, siICENodeContextSingleton,
       L"Point Array", L"pointList");
-	st.AssertSucceeded();
+   st.AssertSucceeded();
 
-	st = nodeDef.AddOutputPort(kVolumeToMeshPolygonArray, siICENodeDataLong,
+   st = nodeDef.AddOutputPort(kVolumeToMeshPolygonArray, siICENodeDataLong,
       siICENodeStructureArray, siICENodeContextSingleton,
       L"Polygon Array", L"polygonPoolList");
-	st.AssertSucceeded();
+   st.AssertSucceeded();
 
-	PluginItem nodeItem = reg.RegisterICENode(nodeDef);
-	nodeItem.PutCategories(L"OpenVDB");
+   PluginItem nodeItem = reg.RegisterICENode(nodeDef);
+   nodeItem.PutCategories(L"OpenVDB");
 
-	return CStatus::OK;
+   return CStatus::OK;
 }
 
 SICALLBACK VDB_Node_VolumeToMesh_Init(ICENodeContext& ctxt)

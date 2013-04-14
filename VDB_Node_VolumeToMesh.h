@@ -17,9 +17,10 @@
 enum VDB_Node_VolumeToMeshPorts
 {
    kVolumeToMeshGroup1 = 100,
-	kVolumeToMeshFilePath = 0,
-	kVolumeToMeshIsoValue = 1,
+   kVolumeToMeshFilePath = 0,
+   kVolumeToMeshIsoValue = 1,
    kVolumeToMeshAdaptivity = 2,
+   kVolumeToMeshVDBGrid = 3,
    kVolumeToMeshPointArray = 200,
    kVolumeToMeshPolygonArray = 201,
    kVolumeToMeshTypeCns = 400,

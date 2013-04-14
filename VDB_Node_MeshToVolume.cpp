@@ -88,8 +88,11 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
             //vdb_grid* grid = (vdb_grid*)output.Resize(it, sizeof(vdb_grid));
             //grid->m_distGrid = converter.distGridPtr();
             
-            openvdb::FloatGrid::Ptr* grid = (openvdb::FloatGrid::Ptr*)output.Resize(it, sizeof(openvdb::FloatGrid));
-            grid = &converter.distGridPtr();
+            //openvdb::FloatGrid::Ptr* grid = (openvdb::FloatGrid::Ptr*)output.Resize(it, sizeof(openvdb::FloatGrid));
+            //grid = &converter.distGridPtr();
+
+            openvdb::FloatGrid* grid = ((openvdb::FloatGrid*)output.Resize(it, sizeof(openvdb::FloatGrid)));
+            ::memcpy(grid, converter.distGridPtr().get(), sizeof(openvdb::FloatGrid));
 
             //openvdb::FloatGrid::ConstPtr distGrid;
             //distGrid = (openvdb::FloatGrid::ConstPtr)output.Resize(it, sizeof(openvdb::FloatGrid));
@@ -116,7 +119,7 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
    st.AssertSucceeded();
 
    st = nodeDef.PutThreadingModel(siICENodeSingleThreading);
-	st.AssertSucceeded();
+   st.AssertSucceeded();
 
    // Add custom types definition
    // 178, 26, 13 - old color
