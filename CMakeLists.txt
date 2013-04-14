@@ -38,10 +38,16 @@ include_directories (${INCLUDE_DIRS})
 link_directories (${LINK_DIRS})
 
 set (SOURCES
- openvdb_softimage.cpp
+ OpenVDB_Softimage.cpp
+ VDB_Node_MeshToVolume.cpp
+ VDB_Node_VolumeToMesh.cpp
+ VDB_Utils.cpp
 )
 
 set (HEADERS
+ VDB_Node_MeshToVolume.h
+ VDB_Node_VolumeToMesh.h
+ VDB_Utils.h
 )
 
 set (LINK_LIBS
