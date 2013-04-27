@@ -23,7 +23,7 @@ enum VDB_Node_MeshToVolumePorts
 
 struct vdb_grid
 {
-   openvdb::FloatGrid::Ptr m_distGrid;
+   openvdb::GridBase::ConstPtr m_grid;
 };
 
 class VDB_Node_MeshToVolume

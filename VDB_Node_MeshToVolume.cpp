@@ -14,6 +14,7 @@
 #include <openvdb/tools/MeshToVolume.h>
 
 #include "VDB_Node_MeshToVolume.h"
+#include "VDB_Utils.h"
 
 using namespace XSI;
 
@@ -27,7 +28,7 @@ VDB_Node_MeshToVolume::~VDB_Node_MeshToVolume()
 
 CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
 {
-   Application().LogMessage(L"Evaluate");
+   Application().LogMessage(L"[VDB_Node_MeshToVolume] Evaluate");
 
    CDataArrayFloat voxelSize(ctxt, kMeshToVolumeVoxelSize);
 
@@ -36,7 +37,7 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
    CICEGeometry geometry(ctxt, kMeshToVolumeGeometry);
    if (!geometry.IsValid())
    {
-      Application().LogMessage(L"[openvdb] Input geometry is invalid!", siErrorMsg);
+      Application().LogMessage(L"[VDB_Node_MeshToVolume] Input geometry is invalid!", siErrorMsg);
    }
 
    CDoubleArray points;
@@ -73,26 +74,39 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
 
    // The current output port being evaluated...
    ULONG evaluatedPort = ctxt.GetEvaluatedOutputPortID();
-
+   Application().LogMessage(L"[VDB_Node_MeshToVolume] Evaluate port " + CValue(evaluatedPort).GetAsText());
    switch (evaluatedPort)
    {
       case kMeshToVolumeVDBGrid:
       {
          CDataArrayCustomType output(ctxt);
          CIndexSet::Iterator it = CIndexSet(ctxt).Begin();
-         
+        
          for(; it.HasNext(); it.Next())
-			{
+         {
+            Application().LogMessage(L"[VDB_Node_MeshToVolume] " + CValue(it.GetIndex()).GetAsText());
             //Application().LogMessage(CValue(sizeof(openvdb::FloatGrid)).GetAsText());
             //openvdb::FloatGrid::Ptr distGrid;
-            //vdb_grid* grid = (vdb_grid*)output.Resize(it, sizeof(vdb_grid));
+            VDB_Prim* grid = (VDB_Prim*)output.Resize(it, sizeof(VDB_Prim));
+            grid->SetGrid(*converter.distGridPtr());
             //grid->m_distGrid = converter.distGridPtr();
             
             //openvdb::FloatGrid::Ptr* grid = (openvdb::FloatGrid::Ptr*)output.Resize(it, sizeof(openvdb::FloatGrid));
             //grid = &converter.distGridPtr();
-
-            openvdb::FloatGrid* grid = ((openvdb::FloatGrid*)output.Resize(it, sizeof(openvdb::FloatGrid)));
-            ::memcpy(grid, converter.distGridPtr().get(), sizeof(openvdb::FloatGrid));
+            //openvdb::FloatGrid* grid = ((openvdb::FloatGrid*)output.Resize(it, sizeof(openvdb::FloatGrid)));
+            //Application().LogMessage(L"[VDB_Node_MeshToVolume] " + CValue(converter.distGridPtr()->memUsage()).GetAsText());
+            //::memcpy(grid, converter.distGridPtr().get(), sizeof(converter.distGridPtr()));
+            //Application().LogMessage(L"[VDB_Node_MeshToVolume] done");
+            //std::vector<ULONG>* data;
+            //data->push_back(0);
+            //data->push_back(1);
+            //data->push_back(2);
+            //data->push_back(3);
+            //Application().LogMessage(L"[VDB_Node_MeshToVolume] resize");
+            //std::vector<ULONG>* outData = (std::vector<ULONG>*)output.Resize(it, sizeof(data));
+            //Application().LogMessage(L"[VDB_Node_MeshToVolume] memcpy");
+            //::memcpy(outData, data, sizeof(data));
+            //Application().LogMessage(L"[VDB_Node_MeshToVolume] done");
 
             //openvdb::FloatGrid::ConstPtr distGrid;
             //distGrid = (openvdb::FloatGrid::ConstPtr)output.Resize(it, sizeof(openvdb::FloatGrid));
@@ -156,7 +170,7 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
    customTypes[0] = L"openvdb_grid";
 
    st = nodeDef.AddOutputPort( kMeshToVolumeVDBGrid, customTypes,
-      siICENodeStructureSingle, siICENodeContextAny,
+      siICENodeStructureSingle, siICENodeContextSingleton,
       L"VDB Grid", L"openvdb_grid");
    st.AssertSucceeded();
 
@@ -171,7 +185,7 @@ SICALLBACK VDB_Node_MeshToVolume_Init(ICENodeContext& ctxt)
    if (!openvdb::FloatGrid::isRegistered())
    {
       openvdb::initialize();
-      Application().LogMessage(L"[openvdb] Initialized!");
+      Application().LogMessage(L"[VDB_Node_MeshToVolume] OpenVDB Initialized!");
    }
 
    return CStatus::OK;
