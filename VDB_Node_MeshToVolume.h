@@ -21,11 +21,6 @@ enum VDB_Node_MeshToVolumePorts
    kMeshToVolumeVDBGrid = 200
 };
 
-struct vdb_grid
-{
-   openvdb::GridBase::ConstPtr m_grid;
-};
-
 class VDB_Node_MeshToVolume
 {
 public:
@@ -37,7 +32,6 @@ public:
    static XSI::CStatus Register(XSI::PluginRegistrar& reg);
 private:
    openvdb::math::Transform::Ptr m_transform;
-   //openvdb::FloatGrid::Ptr distGrid;
 };
 
 #endif

@@ -1,4 +1,6 @@
+// OpenVDB_Softimage
 // VDB_Utils.cpp
+// utilties use to help logging VDB related data
 
 #include "VDB_Utils.h"
 

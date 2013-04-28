@@ -17,9 +17,10 @@
 #include <openvdb/tools/MeshToVolume.h>
 #include <openvdb/tools/VolumeToMesh.h>
 
+#include "VDB_Utils.h"
 #include "VDB_Node_VolumeToMesh.h"
 #include "VDB_Node_MeshToVolume.h"
-#include "VDB_Utils.h"
+#include "VDB_Node_TestCustomData.h"
 
 using namespace XSI;
 //using namespace XSI::MATH;
@@ -29,12 +30,16 @@ SICALLBACK XSILoadPlugin (PluginRegistrar& reg)
    reg.PutAuthor(L"Steven Caron");
    reg.PutName(L"OpenVDB_Softimage");
    reg.PutVersion(1, 0);
+
+   // commands
    reg.RegisterCommand(L"openvdb_print", L"openvdb_print");
    reg.RegisterCommand(L"openvdb_volumeToMesh", L"openvdb_volumeToMesh");
    reg.RegisterCommand(L"openvdb_meshToVolume", L"openvdb_meshToVolume");
    
+   // ice nodes
    VDB_Node_VolumeToMesh::Register(reg);
    VDB_Node_MeshToVolume::Register(reg);
+   VDB_Node_TestCustomData::Register(reg);
 
    return CStatus::OK;
 }

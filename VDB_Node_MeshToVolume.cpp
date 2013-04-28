@@ -14,7 +14,7 @@
 #include <openvdb/tools/MeshToVolume.h>
 
 #include "VDB_Node_MeshToVolume.h"
-#include "VDB_Utils.h"
+#include "VDB_Primitive.h"
 
 using namespace XSI;
 
@@ -84,34 +84,10 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
         
          for(; it.HasNext(); it.Next())
          {
-            Application().LogMessage(L"[VDB_Node_MeshToVolume] " + CValue(it.GetIndex()).GetAsText());
-            //Application().LogMessage(CValue(sizeof(openvdb::FloatGrid)).GetAsText());
-            //openvdb::FloatGrid::Ptr distGrid;
-            VDB_Prim* grid = (VDB_Prim*)output.Resize(it, sizeof(VDB_Prim));
+            VDB_Primitive* grid = (VDB_Primitive*)output.Resize(it, sizeof(VDB_Primitive));
             grid->SetGrid(*converter.distGridPtr());
-            //grid->m_distGrid = converter.distGridPtr();
-            
-            //openvdb::FloatGrid::Ptr* grid = (openvdb::FloatGrid::Ptr*)output.Resize(it, sizeof(openvdb::FloatGrid));
-            //grid = &converter.distGridPtr();
-            //openvdb::FloatGrid* grid = ((openvdb::FloatGrid*)output.Resize(it, sizeof(openvdb::FloatGrid)));
-            //Application().LogMessage(L"[VDB_Node_MeshToVolume] " + CValue(converter.distGridPtr()->memUsage()).GetAsText());
-            //::memcpy(grid, converter.distGridPtr().get(), sizeof(converter.distGridPtr()));
-            //Application().LogMessage(L"[VDB_Node_MeshToVolume] done");
-            //std::vector<ULONG>* data;
-            //data->push_back(0);
-            //data->push_back(1);
-            //data->push_back(2);
-            //data->push_back(3);
-            //Application().LogMessage(L"[VDB_Node_MeshToVolume] resize");
-            //std::vector<ULONG>* outData = (std::vector<ULONG>*)output.Resize(it, sizeof(data));
-            //Application().LogMessage(L"[VDB_Node_MeshToVolume] memcpy");
-            //::memcpy(outData, data, sizeof(data));
-            //Application().LogMessage(L"[VDB_Node_MeshToVolume] done");
-
-            //openvdb::FloatGrid::ConstPtr distGrid;
-            //distGrid = (openvdb::FloatGrid::ConstPtr)output.Resize(it, sizeof(openvdb::FloatGrid));
-            //distGrid = *(converter.distGridPtr());
-            //distGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(converter.distGridPtr());
+            Application().LogMessage(L"[VDB_Node_MeshToVolume] grid type is " + grid->GetTypeName());
+            Application().LogMessage(L"[VDB_Node_MeshToVolume] done");
          }
          break;
       }
@@ -137,7 +113,7 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
 
    // Add custom types definition
    // 178, 26, 13 - old color
-   st = nodeDef.DefineCustomType(L"openvdb_grid" ,L"VDB Grid",
+   st = nodeDef.DefineCustomType(L"vdb_prim" ,L"VDB Grid",
       L"openvdb grid type", 155, 21, 10);
    st.AssertSucceeded();
 
@@ -167,11 +143,11 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
 
    // Add output ports.
    CStringArray customTypes(1);
-   customTypes[0] = L"openvdb_grid";
+   customTypes[0] = L"vdb_prim";
 
    st = nodeDef.AddOutputPort( kMeshToVolumeVDBGrid, customTypes,
       siICENodeStructureSingle, siICENodeContextSingleton,
-      L"VDB Grid", L"openvdb_grid");
+      L"VDB Grid", L"outVDBGrid");
    st.AssertSucceeded();
 
    PluginItem nodeItem = reg.RegisterICENode(nodeDef);

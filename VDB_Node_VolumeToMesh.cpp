@@ -10,6 +10,7 @@
 #include <openvdb/tools/VolumeToMesh.h>
 
 #include "VDB_Node_VolumeToMesh.h"
+#include "VDB_Primitive.h"
 
 using namespace XSI;
 using namespace XSI::MATH;
@@ -49,7 +50,7 @@ const CStatus VDB_Node_VolumeToMesh::SetFilePath(CString filePath)
 
 CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
 {
-   Application().LogMessage(L"Evaluate");
+   Application().LogMessage(L"[VDB_Node_VolumeToMesh] Evaluate");
 
    CDataArrayFloat iso(ctxt, kVolumeToMeshIsoValue);
    CDataArrayFloat adaptivity(ctxt, kVolumeToMeshAdaptivity);
@@ -57,25 +58,30 @@ CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
    // Setup level set mesher
    openvdb::tools::VolumeToMesh mesher(iso[0], adaptivity[0]);
 
-   openvdb::GridPtrVec::const_iterator it = m_grids->begin();
-   for (; it != m_grids->end(); ++it)
-   {
-      const openvdb::GridBase::ConstPtr grid = *it;
-      if (!grid) continue;
+   CDataArrayCustomType inVDBGridPort(ctxt, kVolumeToMeshVDBGrid);
+
+   ULONG inDataSize;
+   VDB_Primitive* inVDBPrim;
+   inVDBGridPort.GetData(0, (const CDataArrayCustomType::TData**)&inVDBPrim, inDataSize);
+
+   //openvdb::GridPtrVec::const_iterator it = m_grids->begin();
+   //for (; it != m_grids->end(); ++it)
+   //{
+      const openvdb::GridBase::ConstPtr grid = inVDBPrim->GetConstGridPtr();
+      if (!grid) return CStatus::OK;
       CString gridName(grid->getName().c_str());
       CString gridType(grid->valueType().c_str());
-      Application().LogMessage(m_filePath + L" : " + gridName + L" : " + gridType );
+      Application().LogMessage(L"[VDB_Node_VolumeToMesh] " + gridName + L" : " + gridType );
 
       // first level set only for now
       const openvdb::GridClass gridClass = grid->getGridClass();
       if (gridClass == openvdb::GRID_LEVEL_SET)
       {
          openvdb::FloatGrid::ConstPtr levelSetGrid;
-         levelSetGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(*it);
+         levelSetGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(grid);
          mesher(*(levelSetGrid.get()));
-         break;
       }
-   }
+   //}
 
    // The current output port being evaluated...
    ULONG evaluatedPort = ctxt.GetEvaluatedOutputPortID();
@@ -165,7 +171,7 @@ CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
    st.AssertSucceeded();
 
    // Add custom types definition
-   st = nodeDef.DefineCustomType(L"openvdb_grid" ,L"VDB Grid",
+   st = nodeDef.DefineCustomType(L"vdb_prim" ,L"VDB Grid",
       L"openvdb grid type", 155, 21, 10);
    st.AssertSucceeded();
 
@@ -179,12 +185,12 @@ CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
    //st.AssertSucceeded();
 
    CStringArray customTypes(1);
-   customTypes[0] = L"openvdb_grid";
+   customTypes[0] = L"vdb_prim";
    
    // stupid default arguments wont work have to add ULONG_MAX
    st = nodeDef.AddInputPort(kVolumeToMeshVDBGrid, kVolumeToMeshGroup1,
       customTypes, siICENodeStructureSingle, siICENodeContextSingleton,
-      L"VDB Grid", L"openvdb_grid",ULONG_MAX,ULONG_MAX,ULONG_MAX);
+      L"VDB Grid", L"inVDBGrid",ULONG_MAX,ULONG_MAX,ULONG_MAX);
    st.AssertSucceeded();
    
    st = nodeDef.AddInputPort(kVolumeToMeshIsoValue, kVolumeToMeshGroup1,
@@ -214,22 +220,22 @@ CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
    return CStatus::OK;
 }
 
-SICALLBACK VDB_Node_VolumeToMesh_Init(ICENodeContext& ctxt)
-{
-   Application().LogMessage(L"Init");
-   if (!openvdb::FloatGrid::isRegistered())
-   {
-      openvdb::initialize();
-      Application().LogMessage(L"[openvdb] Initialized!");
-   }
+//SICALLBACK VDB_Node_VolumeToMesh_Init(ICENodeContext& ctxt)
+//{
+   //Application().LogMessage(L"Init");
+   //if (!openvdb::FloatGrid::isRegistered())
+   //{
+   //   openvdb::initialize();
+   //   Application().LogMessage(L"[openvdb] Initialized!");
+   //}
 
-   return CStatus::OK;
-}
+//   return CStatus::OK;
+//}
 
 SICALLBACK VDB_Node_VolumeToMesh_BeginEvaluate(ICENodeContext& ctxt)
 {
-   CDataArrayString filePathData(ctxt, kVolumeToMeshFilePath);
-   Application().LogMessage(L"BeginEvaluate");
+   //CDataArrayString filePathData(ctxt, kVolumeToMeshFilePath);
+   Application().LogMessage(L"[VDB_Node_VolumeToMesh] BeginEvaluate");
    
    CValue userData = ctxt.GetUserData();
    VDB_Node_VolumeToMesh* vdbNode;
@@ -242,8 +248,8 @@ SICALLBACK VDB_Node_VolumeToMesh_BeginEvaluate(ICENodeContext& ctxt)
       vdbNode = (VDB_Node_VolumeToMesh*)(CValue::siPtrType)userData;
    }
    
-   vdbNode->SetFilePath(filePathData[0]);
-   vdbNode->LoadGrids();
+   //vdbNode->SetFilePath(filePathData[0]);
+   //vdbNode->LoadGrids();
    ctxt.PutUserData((CValue::siPtrType)vdbNode);
 
    return CStatus::OK;

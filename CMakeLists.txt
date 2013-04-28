@@ -17,7 +17,7 @@ set (ILMBASE_ROOT "C:/Program Files/ILMBase")
 find_package (ilmbase REQUIRED)
 find_package (tbb)
 
-add_definitions(-DOPENVDB_STATICLIB -DNOMINMAX)
+add_definitions(-DOPENVDB_STATICLIB -DNOMINMAX /bigobj)
 
 message (STATUS "---configuring openvdb_softimage plugin---")
 
@@ -40,13 +40,18 @@ link_directories (${LINK_DIRS})
 set (SOURCES
  OpenVDB_Softimage.cpp
  VDB_Node_MeshToVolume.cpp
+ VDB_Node_TestCustomData.cpp
  VDB_Node_VolumeToMesh.cpp
+ VDB_Primitive.cpp
+ 
  VDB_Utils.cpp
 )
 
 set (HEADERS
  VDB_Node_MeshToVolume.h
+ VDB_Node_TestCustomData.h
  VDB_Node_VolumeToMesh.h
+ VDB_Primitive.h
  VDB_Utils.h
 )
 
