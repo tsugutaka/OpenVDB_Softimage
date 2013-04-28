@@ -14,36 +14,17 @@
 
 #include <openvdb/openvdb.h>
 
-enum VDB_Node_VolumeToMeshPorts
-{
-   kVolumeToMeshGroup1 = 100,
-   kVolumeToMeshFilePath = 0,
-   kVolumeToMeshIsoValue = 1,
-   kVolumeToMeshAdaptivity = 2,
-   kVolumeToMeshVDBGrid = 3,
-   kVolumeToMeshPointArray = 200,
-   kVolumeToMeshPolygonArray = 201,
-   kVolumeToMeshTypeCns = 400,
-};
-
 class VDB_Node_VolumeToMesh
 {
 public:
    VDB_Node_VolumeToMesh();
    ~VDB_Node_VolumeToMesh();
-
-   const XSI::CStatus LoadGrids();
-   const XSI::CStatus SetFilePath(XSI::CString filePath);
    
-   XSI::CStatus BeginEvaluate(XSI::ICENodeContext& ctxt);
+   //XSI::CStatus BeginEvaluate(XSI::ICENodeContext& ctxt);
    XSI::CStatus Evaluate(XSI::ICENodeContext& ctxt);
    
    static XSI::CStatus Register(XSI::PluginRegistrar& reg);
 
-private:
-   XSI::CString m_filePath;
-   openvdb::GridPtrVecPtr m_grids;
-   openvdb::MetaMap::Ptr m_meta;
 };
 
 #endif

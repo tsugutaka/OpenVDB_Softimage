@@ -11,16 +11,6 @@
 
 #include <openvdb/openvdb.h>
 
-enum VDB_Node_MeshToVolumePorts
-{
-   kMeshToVolumeGroup1 = 100,
-   kMeshToVolumeGeometry = 0,
-   kMeshToVolumeVoxelSize = 1,
-   kMeshToVolumeExteriorWidth = 2,
-   kMeshToVolumeInteriorWidth = 3,
-   kMeshToVolumeVDBGrid = 200
-};
-
 class VDB_Node_MeshToVolume
 {
 public:
@@ -31,6 +21,7 @@ public:
    
    static XSI::CStatus Register(XSI::PluginRegistrar& reg);
 private:
+   bool m_isDirty;
    openvdb::math::Transform::Ptr m_transform;
 };
 

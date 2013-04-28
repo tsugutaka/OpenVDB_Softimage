@@ -16,9 +16,18 @@
 #include "VDB_Node_MeshToVolume.h"
 #include "VDB_Primitive.h"
 
+// port values
+static const ULONG kGroup1 = 100;
+static const ULONG kGeometry = 0;
+static const ULONG kVoxelSize = 1;
+static const ULONG kExteriorWidth = 2;
+static const ULONG kInteriorWidth = 3;
+static const ULONG kVDBGrid = 200;
+
 using namespace XSI;
 
 VDB_Node_MeshToVolume::VDB_Node_MeshToVolume()
+   : m_isDirty(true)
 {
 }
 
@@ -30,22 +39,26 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
 {
    Application().LogMessage(L"[VDB_Node_MeshToVolume] Evaluate");
 
-   CDataArrayFloat voxelSize(ctxt, kMeshToVolumeVoxelSize);
+   CDataArrayFloat voxelSize(ctxt, kVoxelSize);
 
    m_transform = openvdb::math::Transform::createLinearTransform(voxelSize[0]);
 
-   CICEGeometry geometry(ctxt, kMeshToVolumeGeometry);
+   CICEGeometry geometry(ctxt, kGeometry);
    if (!geometry.IsValid())
    {
       Application().LogMessage(L"[VDB_Node_MeshToVolume] Input geometry is invalid!", siErrorMsg);
+      return CStatus::OK;
    }
 
+   ULONG pntCount = geometry.GetPointPositionCount();
+   // don't process geometry with no points
+   if (pntCount==0) return CStatus::OK;
    CDoubleArray points;
    geometry.GetPointPositions(points);
 
    // fill pointList for openvdb::tools::MeshToVolume
    std::vector<openvdb::Vec3s> pointList;
-   pointList.reserve(geometry.GetPointPositionCount());
+   pointList.reserve(pntCount);
    
    for (LONG i=0; i<points.GetCount(); i+=3)
    {
@@ -68,8 +81,8 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
    }
 
    openvdb::tools::MeshToVolume<openvdb::FloatGrid> converter(m_transform);
-   CDataArrayFloat extWidth(ctxt, kMeshToVolumeExteriorWidth);
-   CDataArrayFloat intWidth(ctxt, kMeshToVolumeInteriorWidth);
+   CDataArrayFloat extWidth(ctxt, kExteriorWidth);
+   CDataArrayFloat intWidth(ctxt, kInteriorWidth);
    converter.convertToLevelSet(pointList, polygonList, extWidth[0], intWidth[0]);
 
    // The current output port being evaluated...
@@ -77,7 +90,7 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
    Application().LogMessage(L"[VDB_Node_MeshToVolume] Evaluate port " + CValue(evaluatedPort).GetAsText());
    switch (evaluatedPort)
    {
-      case kMeshToVolumeVDBGrid:
+      case kVDBGrid:
       {
          CDataArrayCustomType output(ctxt);
          CIndexSet::Iterator it = CIndexSet(ctxt).Begin();
@@ -118,51 +131,39 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
    st.AssertSucceeded();
 
    // Add input ports and groups.
-   st = nodeDef.AddPortGroup(kMeshToVolumeGroup1);
+   st = nodeDef.AddPortGroup(kGroup1);
    st.AssertSucceeded();
 
-   st = nodeDef.AddInputPort(kMeshToVolumeGeometry, kMeshToVolumeGroup1,
-      siICENodeDataGeometry, siICENodeStructureSingle,
-      siICENodeContextSingleton, L"Geometry", L"geometry");
+   st = nodeDef.AddInputPort(kGeometry, kGroup1, siICENodeDataGeometry,
+      siICENodeStructureSingle, siICENodeContextSingleton,
+      L"Geometry", L"geometry");
    st.AssertSucceeded();
 
-   st = nodeDef.AddInputPort(kMeshToVolumeVoxelSize, kMeshToVolumeGroup1,
-      siICENodeDataFloat, siICENodeStructureSingle, siICENodeContextSingleton,
+   st = nodeDef.AddInputPort(kVoxelSize, kGroup1, siICENodeDataFloat,
+      siICENodeStructureSingle, siICENodeContextSingleton,
       L"Voxel Size", L"voxelSize", CValue(0.1));
    st.AssertSucceeded();
 
-   st = nodeDef.AddInputPort(kMeshToVolumeExteriorWidth, kMeshToVolumeGroup1,
-   siICENodeDataFloat, siICENodeStructureSingle, siICENodeContextSingleton,
-   L"Exterior Width", L"extWidth", CValue(2.0));
+   st = nodeDef.AddInputPort(kExteriorWidth, kGroup1, siICENodeDataFloat,
+      siICENodeStructureSingle, siICENodeContextSingleton,
+      L"Exterior Width", L"extWidth", CValue(2.0));
    st.AssertSucceeded();
 
-   st = nodeDef.AddInputPort(kMeshToVolumeInteriorWidth, kMeshToVolumeGroup1,
-   siICENodeDataFloat, siICENodeStructureSingle, siICENodeContextSingleton,
-   L"Interior Width", L"intWidth", CValue(2.0));
+   st = nodeDef.AddInputPort(kInteriorWidth, kGroup1, siICENodeDataFloat,
+      siICENodeStructureSingle, siICENodeContextSingleton,
+      L"Interior Width", L"intWidth", CValue(2.0));
    st.AssertSucceeded();
 
    // Add output ports.
    CStringArray customTypes(1);
    customTypes[0] = L"vdb_prim";
 
-   st = nodeDef.AddOutputPort( kMeshToVolumeVDBGrid, customTypes,
-      siICENodeStructureSingle, siICENodeContextSingleton,
-      L"VDB Grid", L"outVDBGrid");
+   st = nodeDef.AddOutputPort( kVDBGrid, customTypes, siICENodeStructureSingle,
+      siICENodeContextSingleton, L"VDB Grid", L"outVDBGrid");
    st.AssertSucceeded();
 
    PluginItem nodeItem = reg.RegisterICENode(nodeDef);
    nodeItem.PutCategories(L"OpenVDB");
-
-   return CStatus::OK;
-}
-
-SICALLBACK VDB_Node_MeshToVolume_Init(ICENodeContext& ctxt)
-{
-   if (!openvdb::FloatGrid::isRegistered())
-   {
-      openvdb::initialize();
-      Application().LogMessage(L"[VDB_Node_MeshToVolume] OpenVDB Initialized!");
-   }
 
    return CStatus::OK;
 }
