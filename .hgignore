@@ -1,0 +1,9 @@
+syntax: glob
+.git/
+build/
+
+#excess visual studio files
+*.ncb
+*.suo
+*.sln
+*.user
