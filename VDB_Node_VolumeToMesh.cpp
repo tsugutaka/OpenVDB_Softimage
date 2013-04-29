@@ -7,8 +7,6 @@
 #include <xsi_factory.h>
 #include <xsi_iceportstate.h>
 
-#include <openvdb/tools/VolumeToMesh.h>
-
 #include "VDB_Node_VolumeToMesh.h"
 #include "VDB_Primitive.h"
 
@@ -26,6 +24,8 @@ using namespace XSI;
 using namespace XSI::MATH;
 
 VDB_Node_VolumeToMesh::VDB_Node_VolumeToMesh()
+   : m_isValid(false)
+   , m_polygonArraySize(0)
 {
 }
 
@@ -33,49 +33,9 @@ VDB_Node_VolumeToMesh::~VDB_Node_VolumeToMesh()
 {
 }
 
-//CStatus VDB_Node_VolumeToMesh::BeginEvaluate(ICENodeContext& ctxt)
-//{
-//   CDataArrayCustomType inVDBGridPort(ctxt, kVDBGrid);
-//
-//   ULONG inDataSize;
-//   VDB_Primitive* inVDBPrim;
-//   inVDBGridPort.GetData(0, (const CDataArrayCustomType::TData**)&inVDBPrim, inDataSize);
-//
-//   // if the vdb grid port has no data, then exit
-//   if (!inDataSize) return CStatus::OK;
-//
-//   CDataArrayFloat iso(ctxt, kIsoValue);
-//   CDataArrayFloat adaptivity(ctxt, kAdaptivity);
-//   
-//   // Setup level set mesher
-//   openvdb::tools::VolumeToMesh mesher(iso[0], adaptivity[0]);
-//
-//   const openvdb::GridBase::ConstPtr grid = inVDBPrim->GetConstGridPtr();
-//   
-//   // if the grid is invalid?
-//   if (!grid) return CStatus::OK;
-//
-//   // log some info about the grid
-//   CString gridName(grid->getName().c_str());
-//   CString gridType(grid->valueType().c_str());
-//   Application().LogMessage(L"[VDB_Node_VolumeToMesh] " + gridName + L" : " + gridType );
-//
-//   // level set types only
-//   const openvdb::GridClass gridClass = grid->getGridClass();
-//   if (gridClass == openvdb::GRID_LEVEL_SET)
-//   {
-//      openvdb::FloatGrid::ConstPtr levelSetGrid;
-//      levelSetGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(grid);
-//      mesher(*(levelSetGrid.get()));
-//   }
-//
-//   m_isValid = true;
-//   return CStatus::OK;
-//}
-
-CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
+CStatus VDB_Node_VolumeToMesh::Cache(ICENodeContext& ctxt)
 {
-   Application().LogMessage(L"[VDB_Node_VolumeToMesh] Evaluate");
+   Application().LogMessage(L"[VDB_Node_VolumeToMesh] Cache");
 
    CDataArrayCustomType inVDBGridPort(ctxt, kVDBGrid);
    
@@ -84,12 +44,12 @@ CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
    inVDBGridPort.GetData(0, (const CDataArrayCustomType::TData**)&inVDBPrim, inDataSize);
    
    // if the vdb grid port has no data, then exit
-   if (!inDataSize) return CStatus::OK;
+   if (!inDataSize) return CStatus::Fail;
 
    const openvdb::GridBase::ConstPtr grid = inVDBPrim->GetConstGridPtr();
    
    // if the grid is invalid?
-   if (!grid) return CStatus::OK;
+   if (!grid) return CStatus::Fail;
 
    // log some info about the grid
    CString gridName(grid->getName().c_str());
@@ -104,16 +64,59 @@ CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
 
    // level set classes only
    const openvdb::GridClass gridClass = grid->getGridClass();
-   if (gridClass == openvdb::GRID_LEVEL_SET)
+   if (gridClass != openvdb::GRID_LEVEL_SET) return CStatus::Fail;
+
+   // cast to float grid, still looking for a more direct way to
+   // get the grid to the mesher class
+   openvdb::FloatGrid::ConstPtr levelSetGrid;
+   levelSetGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(grid);
+   mesher(*(levelSetGrid.get()));
+
+   // reset data for cache
+   m_polygonArraySize = 0;
+   m_points.clear();
+   m_quads.clear();
+   m_triangles.clear();
+
+   m_points.resize(mesher.pointListSize());
+   const openvdb::tools::PointList& points = mesher.pointList();
+   for (size_t i=0; i<mesher.pointListSize(); ++i)
    {
-      openvdb::FloatGrid::ConstPtr levelSetGrid;
-      levelSetGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(grid);
-      mesher(*(levelSetGrid.get()));
+      m_points[i] = points[i];
    }
-   else
+   
+   using openvdb::tools::PolygonPoolList;
+   using openvdb::tools::PolygonPool;
+
+   const PolygonPoolList& polyList = mesher.polygonPoolList();
+   size_t i=0, q=0, t=0;
+   for (; i<mesher.polygonPoolListSize(); ++i, q=0, t=0)
    {
-      return CStatus::OK;
+      const PolygonPool& polygons = polyList[i];
+      // accumulate all quads and triangles
+      // keep in mind we need a -1 at the end of each polygon 
+      m_polygonArraySize += polygons.numQuads() * 5;
+      for (; q<polygons.numQuads(); ++q)
+      {
+         m_quads.push_back(polygons.quad(q));
+      }
+
+      m_polygonArraySize += polygons.numTriangles() * 4;
+      for (; t<polygons.numTriangles(); ++t)
+      {
+         m_triangles.push_back(polygons.triangle(t));
+      }
    }
+
+   m_isValid = true;
+   return CStatus::OK;
+}
+
+CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
+{
+   Application().LogMessage(L"[VDB_Node_VolumeToMesh] Evaluate");
+
+   if (!m_isValid) return CStatus::OK;
 
    // The current output port being evaluated...
    ULONG evaluatedPort = ctxt.GetEvaluatedOutputPortID();
@@ -123,63 +126,44 @@ CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
       case kPointArray:
       {
          CDataArray2DVector3f output(ctxt);
-         ULONG listSize = mesher.pointListSize();
          CDataArray2DVector3f::Accessor iter;
-         iter = output.Resize(0, (ULONG)listSize);
+         iter = output.Resize(0, (ULONG)m_points.size());
          CIndexSet::Iterator index = CIndexSet(ctxt).Begin();
-         const openvdb::tools::PointList& points = mesher.pointList();
 
-         for (size_t i=0; i<listSize; ++i, index.Next())
+         for (size_t i=0; i<m_points.size(); ++i, index.Next())
          {
-            openvdb::math::Vec3s pnt = points[i];
+            openvdb::math::Vec3s pnt = m_points[i];
             iter[index] = CVector3f(pnt.x(), pnt.y(), pnt.z());
          }
          break;
       }
       case kPolygonArray:
       {
-         using openvdb::tools::PolygonPoolList;
-         using openvdb::tools::PolygonPool;
-
-         const PolygonPoolList& polyList = mesher.polygonPoolList();
-
-         ULONG arraySize = 0;
-         for (size_t n=0; n<mesher.polygonPoolListSize(); ++n)
-         {
-            const PolygonPool& polygons = polyList[n];
-            // accumulate all quads and triangles
-            // keep in mind we need a -1 at the end of each polygon 
-            arraySize += polygons.numQuads() * 5;
-            arraySize += polygons.numTriangles() * 4;
-         }
-
          CDataArray2DLong output(ctxt);
-         CDataArray2DLong::Accessor iter = output.Resize(0, arraySize);
+         CDataArray2DLong::Accessor iter = output.Resize(0, m_polygonArraySize);
          CIndexSet::Iterator index = CIndexSet(ctxt).Begin();
          
-         size_t i=0, q=0, t=0;
-         for (; i<mesher.polygonPoolListSize(); ++i, q=0, t=0)
+         // quads
+         for (size_t q=0; q<m_quads.size(); ++q)
          {
-            const PolygonPool& polygons = polyList[i];
-            for (; q<polygons.numQuads(); ++q)
-            {
-               const openvdb::Vec4I& quad = polygons.quad(q);
-               iter[index] = quad.w(); index.Next();
-               iter[index] = quad.z(); index.Next();
-               iter[index] = quad.y(); index.Next();
-               iter[index] = quad.x(); index.Next();
-               // end of quad
-               iter[index] = -1; index.Next();
-            }
-            for (; t<polygons.numTriangles(); ++t)
-            {
-               const openvdb::Vec3I& triangle = polygons.triangle(t);
-               iter[index] = triangle.z(); index.Next();
-               iter[index] = triangle.y(); index.Next();
-               iter[index] = triangle.x(); index.Next();
-               // end of triangle
-               iter[index] = -1; index.Next();
-            }
+            const openvdb::Vec4I& quad = m_quads[q];
+            iter[index] = quad.w(); index.Next();
+            iter[index] = quad.z(); index.Next();
+            iter[index] = quad.y(); index.Next();
+            iter[index] = quad.x(); index.Next();
+            // end of quad
+            iter[index] = -1; index.Next();
+         }
+
+         // triangles
+         for (size_t t=0; t<m_triangles.size(); ++t)
+         {
+            const openvdb::Vec3I& triangle = m_triangles[t];
+            iter[index] = triangle.z(); index.Next();
+            iter[index] = triangle.y(); index.Next();
+            iter[index] = triangle.x(); index.Next();
+            // end of triangle
+            iter[index] = -1; index.Next();
          }
          break;
       }
@@ -188,6 +172,11 @@ CStatus VDB_Node_VolumeToMesh::Evaluate(ICENodeContext& ctxt)
    };
    
    return CStatus::OK;
+}
+
+bool VDB_Node_VolumeToMesh::IsValid()
+{
+   return m_isValid;
 }
 
 CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
@@ -211,11 +200,6 @@ CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
    // Add input ports and groups.
    st = nodeDef.AddPortGroup(kGroup1);
    st.AssertSucceeded();
-
-   //st = nodeDef.AddInputPort(kFilePath, kGroup1,
-   //   siICENodeDataString, siICENodeStructureSingle, siICENodeContextSingleton,
-   //   L"File Path", L"filePath", L"");
-   //st.AssertSucceeded();
 
    CStringArray customTypes(1);
    customTypes[0] = L"vdb_prim";
@@ -265,33 +249,67 @@ CStatus VDB_Node_VolumeToMesh::Register(PluginRegistrar& reg)
 //   return CStatus::OK;
 //}
 
-//SICALLBACK VDB_Node_VolumeToMesh_BeginEvaluate(ICENodeContext& ctxt)
-//{
-//   //CDataArrayString filePathData(ctxt, kFilePath);
-//   Application().LogMessage(L"[VDB_Node_VolumeToMesh] BeginEvaluate");
-//
-//   CValue userData = ctxt.GetUserData();
-//   VDB_Node_VolumeToMesh* vdbNode;
-//   if (userData.IsEmpty())
-//   {
-//      vdbNode = new VDB_Node_VolumeToMesh;
-//   }
-//   else
-//   {
-//      vdbNode = (VDB_Node_VolumeToMesh*)(CValue::siPtrType)userData;
-//   }
-//   vdbNode->BeginEvaluate(ctxt);
-//   ctxt.PutUserData((CValue::siPtrType)vdbNode);
-//   return CStatus::OK;
-//}
+SICALLBACK VDB_Node_VolumeToMesh_BeginEvaluate(ICENodeContext& ctxt)
+{
+   Application().LogMessage(L"[VDB_Node_VolumeToMesh] BeginEvaluate");
+
+   CValue userData = ctxt.GetUserData();
+   VDB_Node_VolumeToMesh* vdbNode;
+   if (userData.IsEmpty())
+   {
+      vdbNode = new VDB_Node_VolumeToMesh;
+   }
+   else
+   {
+      vdbNode = (VDB_Node_VolumeToMesh*)(CValue::siPtrType)userData;
+   }
+
+   CICEPortState vdbGridPortState(ctxt, kVDBGrid);
+   CICEPortState isoPortState(ctxt, kIsoValue);
+   CICEPortState adaptPortState(ctxt, kAdaptivity);
+
+   bool vdbGridDirty = vdbGridPortState.IsDirty(CICEPortState::siAnyDirtyState);
+   bool isoDirty = isoPortState.IsDirty(CICEPortState::siAnyDirtyState);
+   bool adaptDirty = adaptPortState.IsDirty(CICEPortState::siAnyDirtyState);
+
+   vdbGridPortState.ClearState();
+   isoPortState.ClearState();
+   adaptPortState.ClearState();
+
+   if (vdbGridDirty || isoDirty || adaptDirty)
+   {
+      vdbNode->Cache(ctxt);
+   }
+
+   ctxt.PutUserData((CValue::siPtrType)vdbNode);
+   return CStatus::OK;
+}
 
 SICALLBACK VDB_Node_VolumeToMesh_Evaluate(ICENodeContext& ctxt)
 {
-   //CValue userData = ctxt.GetUserData();
-   //VDB_Node_VolumeToMesh* vdbNode;
-   //vdbNode = (VDB_Node_VolumeToMesh*)(CValue::siPtrType)userData;
-   VDB_Node_VolumeToMesh* vdbNode = new VDB_Node_VolumeToMesh();
-   vdbNode->Evaluate(ctxt);
+   CValue userData = ctxt.GetUserData();
+   VDB_Node_VolumeToMesh* vdbNode;
+   vdbNode = (VDB_Node_VolumeToMesh*)(CValue::siPtrType)userData;
+   if (vdbNode->IsValid())
+   {
+      vdbNode->Evaluate(ctxt);
+   }
    
    return CStatus::OK;
+}
+
+// Clears if the the file is invalid.
+SICALLBACK VDB_Node_VolumeToMesh_EndEvaluate(ICENodeContext& ctxt)
+{
+   CValue userData = ctxt.GetUserData();
+   VDB_Node_VolumeToMesh* vdbNode;
+   vdbNode = (VDB_Node_VolumeToMesh*)(CValue::siPtrType)userData;
+	
+	if(!vdbNode->IsValid())
+	{
+      delete vdbNode;
+		ctxt.PutUserData(CValue());
+	}
+
+	return CStatus::OK;
 }
