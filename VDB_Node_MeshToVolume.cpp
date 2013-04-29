@@ -22,6 +22,7 @@ static const ULONG kGeometry = 0;
 static const ULONG kVoxelSize = 1;
 static const ULONG kExteriorWidth = 2;
 static const ULONG kInteriorWidth = 3;
+static const ULONG kGridName = 4;
 static const ULONG kVDBGrid = 200;
 
 using namespace XSI;
@@ -47,6 +48,11 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
    if (!geometry.IsValid())
    {
       Application().LogMessage(L"[VDB_Node_MeshToVolume] Input geometry is invalid!", siErrorMsg);
+      return CStatus::OK;
+   }
+   if (geometry.GetGeometryType() != CICEGeometry::siMeshSurfaceType)
+   {
+      Application().LogMessage(L"[VDB_Node_MeshToVolume] Input geometry must be polymesh at this time!", siErrorMsg);
       return CStatus::OK;
    }
 
@@ -84,10 +90,13 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
    CDataArrayFloat extWidth(ctxt, kExteriorWidth);
    CDataArrayFloat intWidth(ctxt, kInteriorWidth);
    converter.convertToLevelSet(pointList, polygonList, extWidth[0], intWidth[0]);
+   openvdb::GridBase::Ptr outputGrid = converter.distGridPtr();
+   CDataArrayString gridName(ctxt, kGridName);
+   if (!gridName[0].IsEmpty()) outputGrid->setName(gridName[0].GetAsciiString());
 
    // The current output port being evaluated...
    ULONG evaluatedPort = ctxt.GetEvaluatedOutputPortID();
-   Application().LogMessage(L"[VDB_Node_MeshToVolume] Evaluate port " + CValue(evaluatedPort).GetAsText());
+
    switch (evaluatedPort)
    {
       case kVDBGrid:
@@ -97,10 +106,8 @@ CStatus VDB_Node_MeshToVolume::Evaluate(ICENodeContext& ctxt)
         
          for(; it.HasNext(); it.Next())
          {
-            VDB_Primitive* grid = (VDB_Primitive*)output.Resize(it, sizeof(VDB_Primitive));
-            grid->SetGrid(*converter.distGridPtr());
-            Application().LogMessage(L"[VDB_Node_MeshToVolume] grid type is " + grid->GetTypeName());
-            Application().LogMessage(L"[VDB_Node_MeshToVolume] done");
+            VDB_Primitive* vdbPrim = (VDB_Primitive*)output.Resize(it, sizeof(VDB_Primitive));
+            vdbPrim->SetGrid(*outputGrid);
          }
          break;
       }
@@ -152,6 +159,11 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
    st = nodeDef.AddInputPort(kInteriorWidth, kGroup1, siICENodeDataFloat,
       siICENodeStructureSingle, siICENodeContextSingleton,
       L"Interior Width", L"intWidth", CValue(2.0));
+   st.AssertSucceeded();
+
+   st = nodeDef.AddInputPort(kGridName, kGroup1, siICENodeDataString,
+      siICENodeStructureSingle, siICENodeContextSingleton,
+      L"Grid Name", L"gridName", L"");
    st.AssertSucceeded();
 
    // Add output ports.
