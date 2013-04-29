@@ -43,7 +43,6 @@ set (SOURCES
  VDB_Node_TestCustomData.cpp
  VDB_Node_VolumeToMesh.cpp
  VDB_Primitive.cpp
- 
  VDB_Utils.cpp
 )
 
