@@ -35,3 +35,8 @@ openvdb::GridBase::ConstPtr VDB_Primitive::GetConstGridPtr() const
 {
    return m_grid;
 }
+
+openvdb::GridBase::Ptr VDB_Primitive::GetGridPtr()
+{
+   return m_grid;
+}

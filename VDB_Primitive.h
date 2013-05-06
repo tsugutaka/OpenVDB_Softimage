@@ -19,6 +19,7 @@ public:
    const XSI::CString GetTypeName();
    
    openvdb::GridBase::ConstPtr GetConstGridPtr() const;
+   openvdb::GridBase::Ptr GetGridPtr();
 
 private:
    openvdb::GridBase::Ptr  m_grid;
