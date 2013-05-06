@@ -298,7 +298,6 @@ SICALLBACK VDB_Node_VolumeToMesh_Evaluate(ICENodeContext& ctxt)
    return CStatus::OK;
 }
 
-// Clears if the the file is invalid.
 SICALLBACK VDB_Node_VolumeToMesh_EndEvaluate(ICENodeContext& ctxt)
 {
    CValue userData = ctxt.GetUserData();
