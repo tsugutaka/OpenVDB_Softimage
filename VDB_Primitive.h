@@ -16,7 +16,7 @@ public:
    ~VDB_Primitive();
 
    void SetGrid(const openvdb::GridBase& grid);
-   const XSI::CString GetTypeName();
+   XSI::CString GetTypeName() const;
    
    openvdb::GridBase::ConstPtr GetConstGridPtr() const;
    openvdb::GridBase::Ptr GetGridPtr();

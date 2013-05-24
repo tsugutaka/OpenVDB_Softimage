@@ -25,10 +25,9 @@ void VDB_Primitive::SetGrid(const openvdb::GridBase& grid)
    m_grid = grid.copyGrid();
 }
 
-const XSI::CString VDB_Primitive::GetTypeName()
+XSI::CString VDB_Primitive::GetTypeName() const
 {
-   if (!m_grid) return XSI::CString();
-   return XSI::CString(m_grid->valueType().c_str());
+   return m_grid ? m_grid->valueType().c_str() : "";
 }
 
 openvdb::GridBase::ConstPtr VDB_Primitive::GetConstGridPtr() const
