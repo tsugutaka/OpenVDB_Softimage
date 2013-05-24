@@ -22,6 +22,8 @@
 #include "VDB_Node_MeshToVolume.h"
 #include "VDB_Node_TestCustomData.h"
 #include "VDB_Node_Noise.h"
+#include "VDB_Node_Turbulence.h"
+#include "VDB_Node_FBM.h"
 
 using namespace XSI;
 //using namespace XSI::MATH;
@@ -42,6 +44,8 @@ SICALLBACK XSILoadPlugin (PluginRegistrar& reg)
    VDB_Node_MeshToVolume::Register(reg);
    VDB_Node_TestCustomData::Register(reg);
    VDB_Node_Noise::Register(reg);
+   VDB_Node_Turbulence::Register(reg);
+   VDB_Node_FBM::Register(reg);
 
    return CStatus::OK;
 }
