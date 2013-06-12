@@ -24,6 +24,7 @@
 #include "VDB_Node_Noise.h"
 #include "VDB_Node_Turbulence.h"
 #include "VDB_Node_FBM.h"
+#include "VDB_Node_Write.h"
 
 using namespace XSI;
 //using namespace XSI::MATH;
@@ -46,6 +47,7 @@ SICALLBACK XSILoadPlugin (PluginRegistrar& reg)
    VDB_Node_Noise::Register(reg);
    VDB_Node_Turbulence::Register(reg);
    VDB_Node_FBM::Register(reg);
+   VDB_Node_Write::Register(reg);
 
    return CStatus::OK;
 }
