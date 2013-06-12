@@ -176,6 +176,7 @@ SICALLBACK VDB_Node_FBM_BeginEvaluate(ICENodeContext& ctxt)
       {
          Application().LogMessage(L"[VDB_Node_FBM] port is data dirty");
       }
+      portState.ClearState();
    }
    return CStatus::OK;
 }
