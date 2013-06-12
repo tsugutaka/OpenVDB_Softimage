@@ -166,7 +166,7 @@ CStatus VDB_Node_MeshToVolume::Register(PluginRegistrar& reg)
       L"Grid Name", L"gridName", L"");
    st.AssertSucceeded();
 
-   // Add output ports.
+   // Add custom type names.
    CStringArray customTypes(1);
    customTypes[0] = L"vdb_prim";
 

@@ -130,7 +130,7 @@ CStatus VDB_Node_Turbulence::Register(PluginRegistrar& reg)
    st = nodeDef.AddPortGroup(kGroup1);
    st.AssertSucceeded();
 
-   // Add output ports.
+   // Add custom type names.
    CStringArray customTypes(1);
    customTypes[0] = L"vdb_prim";
 
