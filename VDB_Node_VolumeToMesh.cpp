@@ -12,7 +12,6 @@
 
 // port values
 static const ULONG kGroup1 = 100;
-static const ULONG kFilePath = 0;
 static const ULONG kIsoValue = 1;
 static const ULONG kAdaptivity = 2;
 static const ULONG kVDBGrid = 3;
